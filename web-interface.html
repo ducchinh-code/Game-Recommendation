@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Game Recommendation System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1b2838;
+            color: #c7d5e0;
+        }
+
+        .container {
+            background: #2a475e;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2 {
+            color: #66c0f4;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #4c6b22;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #5c7c32;
+        }
+
+        .danger {
+            background: #cd5c5c;
+        }
+
+        .danger:hover {
+            background: #dc6c6c;
+        }
+
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #4c6b22;
+            border-radius: 4px;
+            background: #3c5a78;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: #1e2328;
+        }
+
+        th, td {
+            border: 1px solid #4c6b22;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background: #4c6b22;
+            color: white;
+        }
+
+        .rating-input {
+            width: 50px;
+            text-align: center;
+        }
+
+        .game-item {
+            background: #3c5a78;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .recommendation {
+            background: #4c6b22;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #3c5a78;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .similarity-score {
+            font-weight: bold;
+            color: #66c0f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Steam Game Recommendation System</h1>
+
+    <div class="container">
+        <h2>Tạo Data Người Dùng & Ma Trận Ratings</h2>
+
+        <div class="controls">
+            <button onclick="generateSampleData()">Tạo Sample Data</button>
+            <button onclick="generateUserRatings()">Tạo User Ratings</button>
+            <button onclick="calculateRecommendations()">Tính Recommendations</button>
+            <button onclick="exportData()" class="danger">Export CSV</button>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="newUserName" placeholder="Tên người dùng mới" />
+            <button onclick="addNewUser()">Thêm User</button>
+            <select id="gameSelect">
+                <option value="">Chọn game để rate</option>
+            </select>
+            <input type="number" id="ratingInput" min="1" max="5" placeholder="Rating (1-5)" />
+            <button onclick="addRating()">Thêm Rating</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Ma Trận User-Game Ratings</h2>
+        <div id="ratingsMatrix"></div>
+    </div>
+
+    <div class="container">
+        <h2>🎯 Recommendations</h2>
+        <select id="userSelect" onchange="showRecommendations()">
+            <option value="">Chọn user để xem recommendations</option>
+        </select>
+        <div id="recommendations"></div>
+    </div>
+
+    <div class="container">
+        <h2>📈 Thống Kê</h2>
+        <div id="statistics" class="stats"></div>
+    </div>
+
+    <script>
+        // Sample Steam games data based on your screenshot
+        let steamGames = [
+            {id: 1, name: "Counter-Strike", positive: 24534, negative: 3339, genre: "Action"},
+            {id: 2, name: "Team Fortress", positive: 3318, negative: 633, genre: "Action"},
+            {id: 3, name: "Day of Defeat", positive: 3416, negative: 398, genre: "FPS"},
+            {id: 4, name: "Deathmatch Classic", positive: 1273, negative: 267, genre: "Action"},
+            {id: 5, name: "Half-Life: Opposing Force", positive: 5250, negative: 288, genre: "FPS"},
+            {id: 6, name: "Ricochet", positive: 2758, negative: 684, genre: "Action"},
+            {id: 7, name: "Half-Life", positive: 27755, negative: 1100, genre: "FPS"},
+            {id: 8, name: "Counter-Strike: Condition Zero", positive: 12120, negative: 1439, genre: "Action"},
+            {id: 9, name: "Half-Life: Blue Shift", positive: 3822, negative: 420, genre: "FPS"},
+            {id: 10, name: "Half-Life 2", positive: 67902, negative: 2419, genre: "FPS"},
+            {id: 11, name: "Counter-Strike: Source", positive: 76640, negative: 3497, genre: "Action"},
+            {id: 12, name: "Half-Life 2: Episode One", positive: 3767, negative: 1053, genre: "FPS"},
+            {id: 13, name: "Day of Defeat: Source", positive: 10489, negative: 1210, genre: "FPS"},
+            {id: 14, name: "Half-Life 2: Episode Two", positive: 6020, negative: 787, genre: "FPS"},
+            {id: 15, name: "Portal", positive: 51801, negative: 1080, genre: "Puzzle"},
+            {id: 16, name: "Left 4 Dead", positive: 1362, negative: 473, genre: "Action"},
+            {id: 17, name: "Half-Life 2: Deathmatch", positive: 7908, negative: 517, genre: "FPS"},
+            {id: 18, name: "Portal 2", positive: 13902, negative: 696, genre: "Puzzle"},
+            {id: 19, name: "Team Fortress 2", positive: 515879, negative: 34036, genre: "Action"},
+            {id: 20, name: "Left 4 Dead 2", positive: 17951, negative: 948, genre: "Action"}
+        ];
+
+        let users = [];
+        let userRatings = {}; // {userId: {gameId: rating}}
+        let recommendations = {};
+
+        function generateSampleData() {
+            // Generate sample users
+            const sampleUsers = ['Nam', 'Anh', 'Hoa', 'Mai', 'Bảo', 'Nga', 'Bình', 'Phúc', 'Long', 'Hoàng'];
+            users = sampleUsers.map((name, index) => ({
+                id: index + 1,
+                name: name
+            }));
+
+            // Generate sample ratings
+            userRatings = {};
+            users.forEach(user => {
+                userRatings[user.id] = {};
+                // Each user rates 8-15 random games
+                const numRatings = Math.floor(Math.random() * 8) + 8;
+                const ratedGames = new Set();
+
+                for(let i = 0; i < numRatings; i++) {
+                    let gameId;
+                    do {
+                        gameId = Math.floor(Math.random() * steamGames.length) + 1;
+                    } while(ratedGames.has(gameId));
+
+                    ratedGames.add(gameId);
+                    // Rating based on game popularity (higher positive reviews = higher chance of good rating)
+                    const game = steamGames.find(g => g.id === gameId);
+                    const positiveRatio = game.positive / (game.positive + game.negative);
+                    const baseRating = Math.floor(positiveRatio * 5) + 1;
+                    const variation = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+                    userRatings[user.id][gameId] = Math.max(1, Math.min(5, baseRating + variation));
+                }
+            });
+
+            updateUI();
+            alert('✅ Đã tạo sample data với ' + users.length + ' users!');
+        }
+
+        function generateUserRatings() {
+            if(users.length === 0) {
+                alert('Vui lòng tạo sample data trước!');
+                return;
+            }
+
+            // Add more random ratings
+            users.forEach(user => {
+                const currentRatings = Object.keys(userRatings[user.id] || {}).length;
+                const additionalRatings = Math.floor(Math.random() * 5) + 2;
+
+                for(let i = 0; i < additionalRatings; i++) {
+                    const gameId = Math.floor(Math.random() * steamGames.length) + 1;
+                    if(!userRatings[user.id][gameId]) {
+                        userRatings[user.id][gameId] = Math.floor(Math.random() * 5) + 1;
+                    }
+                }
+            });
+
+            updateUI();
+            alert('✅ Đã cập nhật thêm ratings cho users!');
+        }
+
+        function calculateRecommendations() {
+            if(users.length === 0) {
+                alert('Vui lòng tạo data trước!');
+                return;
+            }
+
+            recommendations = {};
+
+            users.forEach(targetUser => {
+                const userSimilarities = [];
+
+                // Calculate similarity with other users
+                users.forEach(otherUser => {
+                    if(targetUser.id !== otherUser.id) {
+                        const similarity = calculateUserSimilarity(targetUser.id, otherUser.id);
+                        if(similarity > 0) {
+                            userSimilarities.push({
+                                userId: otherUser.id,
+                                userName: otherUser.name,
+                                similarity: similarity
+                            });
+                        }
+                    }
+                });
+
+                // Sort by similarity
+                userSimilarities.sort((a, b) => b.similarity - a.similarity);
+
+                // Get game recommendations
+                const gameRecommendations = [];
+                const targetUserRatings = userRatings[targetUser.id] || {};
+
+                steamGames.forEach(game => {
+                    if(!targetUserRatings[game.id]) {
+                        let weightedScore = 0;
+                        let totalWeight = 0;
+
+                        userSimilarities.slice(0, 5).forEach(similar => {
+                            const similarUserRatings = userRatings[similar.userId] || {};
+                            if(similarUserRatings[game.id]) {
+                                weightedScore += similarUserRatings[game.id] * similar.similarity;
+                                totalWeight += similar.similarity;
+                            }
+                        });
+
+                        if(totalWeight > 0) {
+                            const predictedRating = weightedScore / totalWeight;
+                            gameRecommendations.push({
+                                gameId: game.id,
+                                gameName: game.name,
+                                genre: game.genre,
+                                predictedRating: predictedRating,
+                                popularity: game.positive / (game.positive + game.negative)
+                            });
+                        }
+                    }
+                });
+
+                // Sort by predicted rating and popularity
+                gameRecommendations.sort((a, b) => {
+                    if(Math.abs(a.predictedRating - b.predictedRating) < 0.1) {
+                        return b.popularity - a.popularity;
+                    }
+                    return b.predictedRating - a.predictedRating;
+                });
+
+                recommendations[targetUser.id] = {
+                    similarUsers: userSimilarities.slice(0, 5),
+                    games: gameRecommendations.slice(0, 10)
+                };
+            });
+
+            updateUI();
+            alert('✅ Đã tính toán recommendations cho tất cả users!');
+        }
+
+        function calculateUserSimilarity(userId1, userId2) {
+            const user1Ratings = userRatings[userId1] || {};
+            const user2Ratings = userRatings[userId2] || {};
+
+            const commonGames = Object.keys(user1Ratings).filter(gameId =>
+                user2Ratings[gameId] !== undefined
+            );
+
+            if(commonGames.length === 0) return 0;
+
+            // Cosine similarity
+            let dotProduct = 0;
+            let norm1 = 0;
+            let norm2 = 0;
+
+            commonGames.forEach(gameId => {
+                const rating1 = user1Ratings[gameId];
+                const rating2 = user2Ratings[gameId];
+
+                dotProduct += rating1 * rating2;
+                norm1 += rating1 * rating1;
+                norm2 += rating2 * rating2;
+            });
+
+            if(norm1 === 0 || norm2 === 0) return 0;
+
+            return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+        }
+
+        function addNewUser() {
+            const name = document.getElementById('newUserName').value.trim();
+            if(!name) {
+                alert('Vui lòng nhập tên user!');
+                return;
+            }
+
+            const newUser = {
+                id: users.length + 1,
+                name: name
+            };
+
+            users.push(newUser);
+            userRatings[newUser.id] = {};
+
+            document.getElementById('newUserName').value = '';
+            updateUI();
+            alert('✅ Đã thêm user: ' + name);
+        }
+
+        function addRating() {
+            const gameId = parseInt(document.getElementById('gameSelect').value);
+            const rating = parseInt(document.getElementById('ratingInput').value);
+            const userId = users.length; // Latest user
+
+            if(!gameId || !rating || userId === 0) {
+                alert('Vui lòng chọn game và nhập rating!');
+                return;
+            }
+
+            if(!userRatings[userId]) {
+                userRatings[userId] = {};
+            }
+
+            userRatings[userId][gameId] = rating;
+
+            document.getElementById('gameSelect').value = '';
+            document.getElementById('ratingInput').value = '';
+
+            updateUI();
+            alert('✅ Đã thêm rating!');
+        }
+
+        function updateUI() {
+            updateRatingsMatrix();
+            updateGameSelect();
+            updateUserSelect();
+            updateStatistics();
+        }
+
+        function updateRatingsMatrix() {
+            if(users.length === 0) return;
+
+            let html = '<table><thead><tr><th>User</th>';
+
+            // Show top 10 most rated games
+            const gameRatingCounts = {};
+            Object.values(userRatings).forEach(ratings => {
+                Object.keys(ratings).forEach(gameId => {
+                    gameRatingCounts[gameId] = (gameRatingCounts[gameId] || 0) + 1;
+                });
+            });
+
+            const topGames = Object.entries(gameRatingCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .map(([gameId]) => parseInt(gameId));
+
+            topGames.forEach(gameId => {
+                const game = steamGames.find(g => g.id === gameId);
+                html += `<th>${game ? game.name.substring(0, 15) : 'Game ' + gameId}</th>`;
+            });
+
+            html += '</tr></thead><tbody>';
+
+            users.forEach(user => {
+                html += `<tr><td><strong>${user.name}</strong></td>`;
+                topGames.forEach(gameId => {
+                    const rating = userRatings[user.id] && userRatings[user.id][gameId];
+                    html += `<td>${rating || '-'}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('ratingsMatrix').innerHTML = html;
+        }
+
+        function updateGameSelect() {
+            const select = document.getElementById('gameSelect');
+            select.innerHTML = '<option value="">Chọn game để rate</option>';
+
+            steamGames.forEach(game => {
+                select.innerHTML += `<option value="${game.id}">${game.name}</option>`;
+            });
+        }
+
+        function updateUserSelect() {
+            const select = document.getElementById('userSelect');
+            select.innerHTML = '<option value="">Chọn user để xem recommendations</option>';
+
+            users.forEach(user => {
+                select.innerHTML += `<option value="${user.id}">${user.name}</option>`;
+            });
+        }
+
+        function showRecommendations() {
+            const userId = parseInt(document.getElementById('userSelect').value);
+            if(!userId || !recommendations[userId]) {
+                document.getElementById('recommendations').innerHTML = '<p>Vui lòng chọn user và tính recommendations trước!</p>';
+                return;
+            }
+
+            const userRecs = recommendations[userId];
+            let html = '<h3>📊 Similar Users:</h3>';
+
+            userRecs.similarUsers.forEach(similar => {
+                html += `<div class="game-item">
+                    <span>${similar.userName}</span>
+                    <span class="similarity-score">Similarity: ${similar.similarity.toFixed(3)}</span>
+                </div>`;
+            });
+
+            html += '<h3>🎮 Recommended Games:</h3>';
+
+            userRecs.games.forEach((rec, index) => {
+                html += `<div class="recommendation">
+                    <strong>#${index + 1}: ${rec.gameName}</strong>
+                    <div>Genre: ${rec.genre} | Predicted Rating: ${rec.predictedRating.toFixed(2)}/5</div>
+                    <div>Popularity: ${(rec.popularity * 100).toFixed(1)}%</div>
+                </div>`;
+            });
+
+            document.getElementById('recommendations').innerHTML = html;
+        }
+
+        function updateStatistics() {
+            if(users.length === 0) return;
+
+            const totalRatings = Object.values(userRatings).reduce((sum, ratings) =>
+                sum + Object.keys(ratings).length, 0);
+
+            const avgRatingsPerUser = (totalRatings / users.length).toFixed(1);
+
+            const allRatings = [];
+            Object.values(userRatings).forEach(ratings => {
+                Object.values(ratings).forEach(rating => allRatings.push(rating));
+            });
+
+            const avgRating = allRatings.length > 0 ?
+                (allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length).toFixed(2) : 0;
+
+            const ratedGames = new Set();
+            Object.values(userRatings).forEach(ratings => {
+                Object.keys(ratings).forEach(gameId => ratedGames.add(gameId));
+            });
+
+            const html = `
+                <div class="stat-card">
+                    <h3>👥 Total Users</h3>
+                    <div style="font-size: 24px; color: #66c0f4;">${users.length}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>⭐ Total Ratings</h3>
+                    <div style="font-size: 24px; color: #66c0f4;">${totalRatings}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>📊 Avg Ratings/User</h3>
+                    <div style="font-size: 24px; color: #66c0f4;">${avgRatingsPerUser}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>🎯 Avg Rating</h3>
+                    <div style="font-size: 24px; color: #66c0f4;">${avgRating}/5</div>
+                </div>
+                <div class="stat-card">
+                    <h3>🎮 Games Rated</h3>
+                    <div style="font-size: 24px; color: #66c0f4;">${ratedGames.size}/${steamGames.length}</div>
+                </div>
+            `;
+
+            document.getElementById('statistics').innerHTML = html;
+        }
+
+        function exportData() {
+            if(users.length === 0) {
+                alert('Không có data để export!');
+                return;
+            }
+
+            let csv = 'User ID,User Name,Game ID,Game Name,Rating,Genre\n';
+
+            users.forEach(user => {
+                const ratings = userRatings[user.id] || {};
+                Object.entries(ratings).forEach(([gameId, rating]) => {
+                    const game = steamGames.find(g => g.id === parseInt(gameId));
+                    csv += `${user.id},"${user.name}",${gameId},"${game.name}",${rating},"${game.genre}"\n`;
+                });
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'steam_user_ratings.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html>

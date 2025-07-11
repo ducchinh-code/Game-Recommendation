@@ -16,7 +16,7 @@ user_ids = [f"user_{i}" for i in range(num_users)]
 user_data = []
 
 for user in user_ids:
-    rated_games = game_df.sample(random.randint(5, 30))
+    rated_games = filtered_games.sample(random.randint(5, 30))
 
     for _, game in rated_games.iterrows():
         game_id = game["name"]

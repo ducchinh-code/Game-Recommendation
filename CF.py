@@ -5,12 +5,16 @@ from scipy import sparse
 
 
 class CF:
-    def __init__(self, Y_data, k=2, dist_func=cosine_similarity, uuCF=1):
+    def __init__(self, Y_data, k=2, dist_func=cosine_similarity, uuCF=1,
+                 ratings=None, game_code_to_tag=None):
         self.uuCF = uuCF
         self.Y_data = Y_data if uuCF else Y_data[:, [1, 0, 2]]
         self.k = k
         self.dist_func = dist_func
         self.Ybar_data = None
+
+        self.ratings = ratings
+        self.game_code_to_tag = game_code_to_tag
 
         self.n_users = int(np.max(self.Y_data[:, 0])) + 1
         self.n_items = int(np.max(self.Y_data[:, 1])) + 1
@@ -114,24 +118,72 @@ class CF:
             return self._pred(u, i, normalized)
         return self._pred(i, u, normalized)
 
-    def recommend(self, u, normalized=1):
+    def get_user_preferred_tags(self, user_code):
+        if self.ratings is None or self.game_code_to_tag is None:
+            return set()
+        try:
+            game_codes = self.ratings.loc[self.ratings['user_id_code'] == user_code, 'game_name_code']
+        except KeyError:
+            return set()
+
+        all_tags = []
+
+        for code in game_codes:
+            tags = self.game_code_to_tag.get(code, [])
+            if isinstance(tags, list):
+                all_tags.extend(tags)
+        return set(all_tags)
+
+    def recommend(self, u, normalized=1, top_n=20, use_tag_filter=True):
         ids = np.where(self.Y_data[:, 0] == u)[0]
-        items_rated_by_u = self.Y_data[ids, 1].tolist()
+        items_rated_by_u = set(self.Y_data[ids, 1])
+
+        preferred_tags = self.get_user_preferred_tags(u)
         recommended_items = []
 
         for i in range(self.n_items):
-            if i not in items_rated_by_u:
-                rating = self._pred(u, i, normalized)
+            if i in items_rated_by_u:
+                continue
 
-                # Đảm bảo rating là scalar
-                if isinstance(rating, np.ndarray):
-                    rating = rating.item() if rating.size == 1 else rating[0]
+            if use_tag_filter:
+                item_tags = self.game_code_to_tag.get(i, [])
+                if not set(item_tags) & preferred_tags:
+                    continue
 
-                if rating > 0:
-                    recommended_items.append((i, float(rating)))
+            ids_i = np.where(self.Y_data[:, 1] == i)[0]
+            users_rated_i = self.Y_data[ids_i, 0].astype(np.int32)
+            if len(users_rated_i) == 0:
+                continue
+
+            sim = self.S[u, users_rated_i]
+            sim = sim.toarray().flatten() if hasattr(sim, 'toarray') else np.array(sim).flatten()
+            if sim.size == 0 or np.all(sim == 0):
+                continue
+
+            a = np.argsort(sim)[-self.k:]
+            nearest_s = sim[a]
+
+            r_sparse = self.Ybar[i, users_rated_i[a]]
+            r = r_sparse.toarray().flatten() if hasattr(r_sparse, 'toarray') else np.array(r_sparse).flatten()
+
+            sum_sim = np.abs(nearest_s).sum()
+            if sum_sim == 0:
+                continue
+
+            pred = (r @ nearest_s) / (sum_sim + 1e-8)
+            if not normalized:
+                mu_u = self.mu[u]
+                mu_u = mu_u.item() if isinstance(mu_u, np.ndarray) and mu_u.size == 1 else float(np.mean(mu_u))
+                pred += mu_u
+
+            if pred > 0:
+                recommended_items.append((i, float(pred)))
+
+        if not recommended_items and use_tag_filter:
+            return self.recommend(u, normalized=normalized, top_n=top_n, use_tag_filter=False)
 
         recommended_items.sort(key=lambda x: -x[1])
-        return recommended_items
+        return recommended_items[:top_n]
 
     def print_recommendation(self):
         print('Recommendations:')
